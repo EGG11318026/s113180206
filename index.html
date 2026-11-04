@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASTRUM CAMERA | Capture The Deep Space</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        space: {
+                            bg: '#050505',
+                            card: '#0a0a0c',
+                            accent: '#6366f1',
+                            purple: '#a855f7',
+                            silver: '#e2e8f0'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        /* 全域自訂滑鼠樣式 */
+        body {
+            cursor: none;
+            background-color: #050505;
+            color: #f8fafc;
+            overflow-x: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* 隱藏滾動條 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #050505;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e1e24;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3b82f6;
+        }
+
+        /* 自訂游標元素 */
+        #cursor-dot {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 6px;
+            height: 6px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            transition: transform 0.1s ease, width 0.2s ease, height 0.2s ease;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+
+        #cursor-ring {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 32px;
+            height: 32px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9998;
+            transform: translate(-50%, -50%);
+            transition: transform 0.15s ease-out, border-color 0.2s ease, width 0.2s ease, height 0.2s ease;
+        }
+
+        /* 游標跟隨微粒 Canvas */
+        #trail-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 9997;
+        }
+
+        /* 玻璃擬態與高光邊框效果 */
+        .glass-card {
+            background: rgba(15, 15, 20, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .glass-card:hover {
+            border-color: rgba(168, 85, 247, 0.4);
+            box-shadow: 0 10px 30px rgba(168, 85, 247, 0.15), inset 0 0 15px rgba(168, 85, 247, 0.05);
+            transform: translateY(-4px);
+        }
+
+        .glass-nav {
+            background: rgba(5, 5, 5, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* 光暈邊框發光按鈕 */
+        .glow-button {
+            position: relative;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .glow-button::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, transparent 60%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .glow-button:hover {
+            border-color: rgba(168, 85, 247, 0.8);
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+            color: #ffffff;
+        }
+
+        .glow-button:hover::before {
+            opacity: 1;
+        }
+
+        /* 漸層文字 */
+        .text-gradient {
+            background: linear-gradient(135deg, #ffffff 30%, #a855f7 70%, #6366f1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* 宇宙雲霧背影背景 */
+        .cosmic-nebula {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(140px);
+            opacity: 0.12;
+            pointer-events: none;
+        }
+
+        /* 互動提示訊息 Modal */
+        #toast {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+    </style>
+</head>
+<body class="relative min-h-screen text-slate-200 antialiased selection:bg-purple-500 selection:text-white">
+
+    <!-- 全域自訂游標 -->
+    <div id="cursor-dot"></div>
+    <div id="cursor-ring"></div>
+    <canvas id="trail-canvas"></canvas>
+
+    <!-- 背景氣體光暈 (Cosmic Nebulas) -->
+    <div class="cosmic-nebula w-[600px] h-[600px] bg-purple-600 top-[-100px] left-[-100px]"></div>
+    <div class="cosmic-nebula w-[800px] h-[800px] bg-blue-600 bottom-[10%] right-[-200px]"></div>
+    <div class="cosmic-nebula w-[500px] h-[500px] bg-indigo-600 top-[40%] left-[20%]"></div>
+
+    <!-- 全頁面固定 Three.js Canvas 容器 (讓相機模型全程留在畫面上) -->
+    <div id="three-container" class="fixed inset-0 z-0 pointer-events-auto"></div>
+
+    <!-- 頂部導覽列 (Navbar) -->
+    <header class="fixed top-0 left-0 w-full z-50 glass-nav transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+            <!-- Logo -->
+            <a href="#" class="flex items-center gap-3 group">
+                <div class="w-8 h-8 rounded-full border border-purple-500/50 flex items-center justify-center relative overflow-hidden group-hover:border-purple-400 transition-colors">
+                    <div class="w-2 h-2 rounded-full bg-white shadow-[0_0_8px_#fff]"></div>
+                    <div class="absolute inset-0 bg-gradient-to-tr from-purple-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                </div>
+                <span class="text-xl font-light tracking-[0.2em] text-white">ASTRUM</span>
+            </a>
+
+            <!-- 中間選單 -->
+            <nav class="hidden md:flex items-center space-x-10 text-sm tracking-widest text-slate-400 font-light">
+                <a href="#hero" class="hover:text-white transition-colors py-2 relative group">
+                    SERIES
+                    <span class="absolute bottom-0 left-0 w-0 h-[1px] bg-purple-500 transition-all duration-300 group-hover:w-full"></span>
+                </a>
+                <a href="#gallery" class="hover:text-white transition-colors py-2 relative group">
+                    GALLERY
+                    <span class="absolute bottom-0 left-0 w-0 h-[1px] bg-purple-500 transition-all duration-300 group-hover:w-full"></span>
+                </a>
+                <a href="#accessories" class="hover:text-white transition-colors py-2 relative group">
+                    ACCESSORIES
+                    <span class="absolute bottom-0 left-0 w-0 h-[1px] bg-purple-500 transition-all duration-300 group-hover:w-full"></span>
+                </a>
+                <a href="#about" class="hover:text-white transition-colors py-2 relative group">
+                    ABOUT
+                    <span class="absolute bottom-0 left-0 w-0 h-[1px] bg-purple-500 transition-all duration-300 group-hover:w-full"></span>
+                </a>
+            </nav>
+
+            <!-- 右側 Action 按鈕 -->
+            <div class="flex items-center gap-4">
+                <button onclick="showToast('已開啟預購頁面')" class="glow-button px-6 py-2.5 rounded-full text-xs font-medium tracking-widest text-slate-200 uppercase">
+                    Order Now
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主頁 Hero 區塊 -->
+    <section id="hero" class="relative min-h-screen pt-20 flex items-center overflow-hidden">
+        <!-- 刪除此處原本的 three-container，已移至全頁 fixed -->
+
+        <!-- 內容疊加區域 -->
+        <div class="max-w-7xl mx-auto px-6 w-full relative z-10 pointer-events-none py-12">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+                <!-- 左側文案 -->
+                <div class="lg:col-span-6 space-y-8 pointer-events-auto">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-purple-500/30 bg-purple-950/20 text-purple-300 text-xs tracking-widest uppercase backdrop-blur-md">
+                        <span class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+                        Next Generation Optics
+                    </div>
+                    
+                    <h1 class="text-5xl md:text-7xl font-extralight tracking-tight leading-[1.1]">
+                        極致微光，重組宇宙。<br/>
+                        <span class="font-normal text-gradient">Capture the Infinite.</span>
+                    </h1>
+
+                    <p class="text-slate-400 font-light text-base md:text-lg max-w-lg leading-relaxed">
+                        ASTRUM 專為極致夜空與微光攝影而生。結合太空級鈦合金機身與量子感光元件，重塑您對深空與藝術的想像。
+                    </p>
+
+                    <div class="flex flex-wrap gap-4 pt-4">
+                        <a href="#gallery" class="glow-button px-8 py-4 rounded-full text-sm tracking-widest text-white uppercase flex items-center gap-3 group">
+                            探索機型
+                            <i data-lucide="arrow-right" class="w-4 h-4 transition-transform group-hover:translate-x-1"></i>
+                        </a>
+                        <button onclick="scrollToStory()" class="px-8 py-4 rounded-full text-sm tracking-widest text-slate-400 hover:text-white border border-transparent hover:border-slate-800 transition-all uppercase">
+                            觀看細節 360°
+                        </button>
+                    </div>
+
+                    <!-- 規格微標籤 -->
+                    <div class="grid grid-cols-3 gap-6 pt-8 border-t border-slate-800/80 max-w-md">
+                        <div>
+                            <div class="text-2xl font-light text-white">102 MP</div>
+                            <div class="text-xs text-slate-500 tracking-wider uppercase mt-1">Full-Frame CMOS</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-light text-white">0.001</div>
+                            <div class="text-xs text-slate-500 tracking-wider uppercase mt-1">Ultra Low Lux</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-light text-white">412g</div>
+                            <div class="text-xs text-slate-500 tracking-wider uppercase mt-1">Titanium Body</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右側空出給 3D 相機互動 (點擊控制提示) -->
+                <div class="lg:col-span-6 h-[400px] lg:h-[600px] relative pointer-events-none flex items-end justify-center lg:justify-end">
+                    <div class="pointer-events-auto bg-black/40 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full text-xs text-slate-400 flex items-center gap-2 mb-8">
+                        <i data-lucide="sparkles" class="w-4 h-4 text-purple-400"></i>
+                        <span>向下捲動頁面以解鎖 3D 產品故事</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 2: 機型選單與實拍作品展示區 -->
+    <section id="gallery" class="py-32 relative z-10 border-t border-white/5">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+                <div>
+                    <h2 class="text-xs tracking-[0.3em] uppercase text-purple-400 font-medium mb-3">Portfolio</h2>
+                    <h3 class="text-3xl md:text-5xl font-light text-white">宇宙視界：機型實拍藝廊</h3>
+                </div>
+
+                <!-- 機型切換 Tab -->
+                <div class="flex bg-slate-900/80 p-1.5 rounded-full border border-white/10 self-start md:self-auto">
+                    <button onclick="switchTab('one')" id="tab-one" class="tab-btn px-6 py-2.5 rounded-full text-xs tracking-wider transition-all duration-300 bg-purple-600 text-white shadow-lg">
+                        ASTRUM One
+                    </button>
+                    <button onclick="switchTab('x')" id="tab-x" class="tab-btn px-6 py-2.5 rounded-full text-xs tracking-wider text-slate-400 hover:text-white transition-all duration-300">
+                        ASTRUM X
+                    </button>
+                    <button onclick="switchTab('pro')" id="tab-pro" class="tab-btn px-6 py-2.5 rounded-full text-xs tracking-wider text-slate-400 hover:text-white transition-all duration-300">
+                        ASTRUM Pro
+                    </button>
+                </div>
+            </div>
+
+            <!-- 照片 Grid 展示 -->
+            <div id="gallery-grid" class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- JavaScript 動態注入圖片 -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 3: 專屬配件購買區 -->
+    <section id="accessories" class="py-32 relative z-10 bg-black/20 backdrop-blur-xs border-t border-white/5">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center max-w-2xl mx-auto mb-20">
+                <h2 class="text-xs tracking-[0.3em] uppercase text-purple-400 font-medium mb-3">Craftsmanship</h2>
+                <h3 class="text-3xl md:text-4xl font-light text-white mb-4">極緻配件系列</h3>
+                <p class="text-slate-400 text-sm font-light">打造個人專屬的星穹攝影系統，每一件配件皆採用航太等級工藝打造。</p>
+            </div>
+
+            <!-- 配件卡片網格 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- 配件卡片 1 -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col justify-between group">
+                    <div class="relative aspect-square rounded-xl overflow-hidden mb-6 bg-slate-900/50 flex items-center justify-center p-4">
+                        <img src="https://images.unsplash.com/photo-1617005082133-548c4dd27f35?auto=format&fit=crop&w=600&q=80" alt="Filter Set" class="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform duration-500 opacity-80 group-hover:opacity-100">
+                        <span class="absolute top-3 right-3 text-[10px] uppercase tracking-widest px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full text-slate-300 border border-white/10">Optics</span>
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-light text-white mb-1">星空微光濾鏡組</h4>
+                        <p class="text-xs text-slate-400 mb-4 font-light">DeepSpace Filter Set (82mm)</p>
+                        <div class="flex items-center justify-between pt-4 border-t border-white/5">
+                            <span class="text-lg font-medium text-white">$ 380</span>
+                            <button onclick="addToCart('星空微光濾鏡組')" class="glow-button p-2.5 rounded-full text-slate-300 hover:text-white" title="Add to Cart">
+                                <i data-lucide="shopping-bag" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 配件卡片 2 -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col justify-between group">
+                    <div class="relative aspect-square rounded-xl overflow-hidden mb-6 bg-slate-900/50 flex items-center justify-center p-4">
+                        <img src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80" alt="Titanium Grip" class="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform duration-500 opacity-80 group-hover:opacity-100">
+                        <span class="absolute top-3 right-3 text-[10px] uppercase tracking-widest px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full text-slate-300 border border-white/10">Ergonomics</span>
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-light text-white mb-1">鈦金屬模組手把</h4>
+                        <p class="text-xs text-slate-400 mb-4 font-light">Titanium Ergonomic Grip</p>
+                        <div class="flex items-center justify-between pt-4 border-t border-white/5">
+                            <span class="text-lg font-medium text-white">$ 520</span>
+                            <button onclick="addToCart('鈦金屬模組手把')" class="glow-button p-2.5 rounded-full text-slate-300 hover:text-white" title="Add to Cart">
+                                <i data-lucide="shopping-bag" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 配件卡片 3 -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col justify-between group">
+                    <div class="relative aspect-square rounded-xl overflow-hidden mb-6 bg-slate-900/50 flex items-center justify-center p-4">
+                        <img src="https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80" alt="Leather Strap" class="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform duration-500 opacity-80 group-hover:opacity-100">
+                        <span class="absolute top-3 right-3 text-[10px] uppercase tracking-widest px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full text-slate-300 border border-white/10">Leather</span>
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-light text-white mb-1">真皮復古相機背帶</h4>
+                        <p class="text-xs text-slate-400 mb-4 font-light">Horween Leather Strap</p>
+                        <div class="flex items-center justify-between pt-4 border-t border-white/5">
+                            <span class="text-lg font-medium text-white">$ 210</span>
+                            <button onclick="addToCart('真皮復古相機背帶')" class="glow-button p-2.5 rounded-full text-slate-300 hover:text-white" title="Add to Cart">
+                                <i data-lucide="shopping-bag" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 配件卡片 4 -->
+                <div class="glass-card rounded-2xl p-6 flex flex-col justify-between group">
+                    <div class="relative aspect-square rounded-xl overflow-hidden mb-6 bg-slate-900/50 flex items-center justify-center p-4">
+                        <img src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80" alt="Power Bank" class="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform duration-500 opacity-80 group-hover:opacity-100">
+                        <span class="absolute top-3 right-3 text-[10px] uppercase tracking-widest px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full text-slate-300 border border-white/10">Power</span>
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-light text-white mb-1">恆溫耐寒外接電池</h4>
+                        <p class="text-xs text-slate-400 mb-4 font-light">Cryo Power Pack (10000mAh)</p>
+                        <div class="flex items-center justify-between pt-4 border-t border-white/5">
+                            <span class="text-lg font-medium text-white">$ 290</span>
+                            <button onclick="addToCart('恆溫耐寒外接電池')" class="glow-button p-2.5 rounded-full text-slate-300 hover:text-white" title="Add to Cart">
+                                <i data-lucide="shopping-bag" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Section 4: 關於品牌 (About) -->
+    <section id="about" class="py-32 relative z-10 border-t border-white/5">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+                <div class="lg:col-span-6 space-y-6">
+                    <h2 class="text-xs tracking-[0.3em] uppercase text-purple-400 font-medium">About Astrum</h2>
+                    <h3 class="text-3xl md:text-5xl font-light text-white leading-tight">極簡、精確、探索未知的藝術</h3>
+                    <p class="text-slate-400 font-light leading-relaxed">
+                        ASTRUM 創立於 2024 年，由光學物理學家與當代攝影藝術家共同發起。我們相信相機不單是記錄工具，更是人類向浩瀚宇宙發出的光學視窗。
+                    </p>
+                    <p class="text-slate-400 font-light leading-relaxed">
+                        我們捨去所有冗餘裝飾，專注於極簡幾何結構與太空級頂尖材質。每一台 ASTRUM 都經過 140 道精密光學校正，只為呈現純粹無瑕的微光細節。
+                    </p>
+                </div>
+                <div class="lg:col-span-6">
+                    <div class="relative glass-card rounded-3xl p-8 overflow-hidden">
+                        <div class="aspect-video rounded-2xl overflow-hidden relative">
+                            <img src="https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1000&q=80" alt="Starry Sky" class="w-full h-full object-cover">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+                            <div class="absolute bottom-6 left-6 right-6">
+                                <p class="text-sm font-light italic text-slate-200">"Light is the only memory of time."</p>
+                                <span class="text-xs text-slate-400 mt-1 block">— Astrum Design Lab</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 頁尾 (Footer) -->
+    <footer class="relative z-10 border-t border-white/10 bg-black py-16 text-slate-400 text-sm">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-10 mb-16">
+                <!-- Brand Info -->
+                <div class="space-y-4 md:col-span-1">
+                    <a href="#" class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-full border border-purple-500/50 flex items-center justify-center">
+                            <div class="w-1.5 h-1.5 rounded-full bg-white"></div>
+                        </div>
+                        <span class="text-lg font-light tracking-[0.2em] text-white">ASTRUM</span>
+                    </a>
+                    <p class="text-xs text-slate-500 leading-relaxed font-light">
+                        Redefining deep space optical imaging. Engineered for precision and cosmos exploration.
+                    </p>
+                </div>
+
+                <!-- Navigation Links -->
+                <div>
+                    <h5 class="text-white text-xs tracking-widest uppercase mb-4 font-medium">Explore</h5>
+                    <ul class="space-y-2 text-xs font-light">
+                        <li><a href="#hero" class="hover:text-white transition-colors">ASTRUM One</a></li>
+                        <li><a href="#hero" class="hover:text-white transition-colors">ASTRUM X</a></li>
+                        <li><a href="#hero" class="hover:text-white transition-colors">ASTRUM Pro</a></li>
+                        <li><a href="#accessories" class="hover:text-white transition-colors">Custom Optics</a></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h5 class="text-white text-xs tracking-widest uppercase mb-4 font-medium">Support</h5>
+                    <ul class="space-y-2 text-xs font-light">
+                        <li><a href="#" class="hover:text-white transition-colors">Firmware Updates</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">User Manuals</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Global Warranty</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">Contact Service</a></li>
+                    </ul>
+                </div>
+
+                <!-- Newsletter -->
+                <div class="space-y-4">
+                    <h5 class="text-white text-xs tracking-widest uppercase font-medium">Newsletter</h5>
+                    <p class="text-xs text-slate-500 font-light">訂閱獲取最新的微光攝影技術與作品展訊。</p>
+                    <form onsubmit="handleSubscribe(event)" class="flex gap-2">
+                        <input type="email" placeholder="Enter your email" required class="bg-white/5 border border-white/10 rounded-full px-4 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 flex-1">
+                        <button type="submit" class="glow-button px-4 py-2 rounded-full text-xs text-white uppercase tracking-wider">
+                            Join
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Bottom Copyright -->
+            <div class="flex flex-col sm:flex-row justify-between items-center pt-8 border-t border-white/5 text-xs text-slate-600 font-light">
+                <p>&copy; 2026 ASTRUM Optics Inc. All rights reserved.</p>
+                <div class="flex space-x-6 mt-4 sm:mt-0">
+                    <a href="#" class="hover:text-slate-400">Privacy Policy</a>
+                    <a href="#" class="hover:text-slate-400">Terms of Service</a>
+                    <a href="#" class="hover:text-slate-400">Cookie Settings</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Toast Notification Box -->
+    <div id="toast" class="fixed bottom-8 right-8 z-50 transform translate-y-20 opacity-0 pointer-events-none glass-card px-6 py-4 rounded-xl flex items-center gap-3 border border-purple-500/30">
+        <div class="w-2 h-2 rounded-full bg-purple-400 animate-ping"></div>
+        <span id="toast-message" class="text-sm font-light text-white">訊息通知</span>
+    </div>
+
+    <!-- JavaScript 邏輯 -->
+    <script>
+        // 初始化 Lucide 圖標
+        lucide.createIcons();
+
+        /* --------------------------------------------------
+         * 1. 自訂滑鼠游標 (Custom Cursor & Particle Trail)
+         * -------------------------------------------------- */
+        const cursorDot = document.getElementById('cursor-dot');
+        const cursorRing = document.getElementById('cursor-ring');
+        const trailCanvas = document.getElementById('trail-canvas');
+        const ctx = trailCanvas.getContext('2d');
+
+        let mouseX = window.innerWidth / 2;
+        let mouseY = window.innerHeight / 2;
+        let ringX = mouseX;
+        let ringY = mouseY;
+        let particles = [];
+
+        function resizeCanvas() {
+            trailCanvas.width = window.innerWidth;
+            trailCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+
+            // 游標點即時跟隨
+            cursorDot.style.left = `${mouseX}px`;
+            cursorDot.style.top = `${mouseY}px`;
+
+            // 產生隨機極淡粒子跟隨
+            if (Math.random() < 0.6) {
+                particles.push({
+                    x: mouseX,
+                    y: mouseY,
+                    size: Math.random() * 2 + 0.5,
+                    alpha: 0.6,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    color: Math.random() > 0.5 ? '#a855f7' : '#6366f1'
+                });
+            }
+        });
+
+        // 懸停可互動元素時放大外環
+        const interactables = document.querySelectorAll('a, button, input, .glass-card');
+        interactables.forEach(el => {
+            el.addEventListener('mouseenter', () => {
+                cursorRing.style.width = '50px';
+                cursorRing.style.height = '50px';
+                cursorRing.style.borderColor = 'rgba(168, 85, 247, 0.8)';
+            });
+            el.addEventListener('mouseleave', () => {
+                cursorRing.style.width = '32px';
+                cursorRing.style.height = '32px';
+                cursorRing.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            });
+        });
+
+        function renderTrail() {
+            // 平滑外環動畫
+            ringX += (mouseX - ringX) * 0.15;
+            ringY += (mouseY - ringY) * 0.15;
+            cursorRing.style.left = `${ringX}px`;
+            cursorRing.style.top = `${ringY}px`;
+
+            // 畫布微粒繪製
+            ctx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+            for (let i = 0; i < particles.length; i++) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.015;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = Math.max(p.alpha, 0);
+                ctx.fill();
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                    i--;
+                }
+            }
+            requestAnimationFrame(renderTrail);
+        }
+        renderTrail();
+
+        /* --------------------------------------------------
+         * 2. Three.js 3D 鏡頭模型與星空背景
+         * -------------------------------------------------- */
+        const container = document.getElementById('three-container');
+        let scene, camera, renderer, cameraGroup, starParticles;
+        let cameraModelGroup;
+
+        // 滾動驅動動畫相關參數
+        let scrollProgress = 0;
+        let currentScroll = 0;
+
+        function initThree() {
+            scene = new THREE.Scene();
+
+            // 攝影機與群組 (方便做視差傾斜)
+            cameraGroup = new THREE.Group();
+            scene.add(cameraGroup);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 7);
+            cameraGroup.add(camera);
+
+            // 渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
+            container.appendChild(renderer.domElement);
+
+            // OrbitControls 手勢導覽
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.enableZoom = false; // 讓滾輪專注於頁面滾動故事體驗
+
+            /* 光源設置 - 增強相機與背景的視覺對比 */
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+
+            // 主金屬高光 (高亮白光帶藍紫)
+            const mainLight = new THREE.DirectionalLight(0xffffff, 3.5);
+            mainLight.position.set(5, 6, 6);
+            scene.add(mainLight);
+
+            // 側面冷光
+            const fillLight = new THREE.DirectionalLight(0x818cf8, 2.5);
+            fillLight.position.set(-6, -2, 3);
+            scene.add(fillLight);
+
+            // 強烈金屬邊緣輪廓光 (Edge Rim Light - 讓機身輪廓從背景跳脫出來)
+            const rimLight1 = new THREE.DirectionalLight(0xc084fc, 4.0);
+            rimLight1.position.set(-5, 5, -5);
+            scene.add(rimLight1);
+
+            const rimLight2 = new THREE.DirectionalLight(0x38bdf8, 3.0);
+            rimLight2.position.set(5, -5, -4);
+            scene.add(rimLight2);
+
+            /* 打造 3D 相機模型 (組合幾何體) */
+            cameraModelGroup = new THREE.Group();
+
+            // 1. 機身
+            const bodyGeo = new THREE.BoxGeometry(2.4, 1.4, 0.8);
+            const bodyMat = new THREE.MeshStandardMaterial({
+                color: 0x22232a,
+                metalness: 0.9,
+                roughness: 0.25,
+            });
+            const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+            cameraModelGroup.add(bodyMesh);
+
+            // 2. 握把
+            const gripGeo = new THREE.BoxGeometry(0.4, 1.35, 0.9);
+            const gripMat = new THREE.MeshStandardMaterial({
+                color: 0x121318,
+                metalness: 0.4,
+                roughness: 0.6,
+            });
+            const gripMesh = new THREE.Mesh(gripGeo, gripMat);
+            gripMesh.position.set(1.1, -0.02, 0.1);
+            cameraModelGroup.add(gripMesh);
+
+            // 3. 頂部快門與轉盤
+            const dialGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.1, 32);
+            const metalBrightMat = new THREE.MeshStandardMaterial({
+                color: 0xe2e8f0,
+                metalness: 0.98,
+                roughness: 0.1
+            });
+            const dial1 = new THREE.Mesh(dialGeo, metalBrightMat);
+            dial1.position.set(-0.7, 0.75, 0);
+            cameraModelGroup.add(dial1);
+
+            const shutterGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.12, 32);
+            const shutter = new THREE.Mesh(shutterGeo, metalBrightMat);
+            shutter.position.set(0.8, 0.75, 0.1);
+            cameraModelGroup.add(shutter);
+
+            // 4. 鏡頭筒 (Lens Outer Barrel)
+            const lensGroup = new THREE.Group();
+            lensGroup.position.set(-0.2, 0, 0.4);
+
+            const b1Geo = new THREE.CylinderGeometry(0.8, 0.8, 0.3, 40);
+            b1Geo.rotateX(Math.PI / 2);
+            const b1 = new THREE.Mesh(b1Geo, bodyMat);
+            lensGroup.add(b1);
+
+            const b2Geo = new THREE.CylinderGeometry(0.72, 0.72, 0.6, 40);
+            b2Geo.rotateX(Math.PI / 2);
+            const b2 = new THREE.Mesh(b2Geo, metalBrightMat);
+            b2.position.z = 0.3;
+            lensGroup.add(b2);
+
+            const ringGeo = new THREE.TorusGeometry(0.7, 0.03, 16, 50);
+            const ringMat = new THREE.MeshStandardMaterial({ color: 0xa855f7, metalness: 0.9, roughness: 0.1 });
+            const metallicRing = new THREE.Mesh(ringGeo, ringMat);
+            metallicRing.position.z = 0.58;
+            lensGroup.add(metallicRing);
+
+            // 5. 光學鍍膜玻璃鏡片 (Coated Lens Glass)
+            const glassGeo = new THREE.SphereGeometry(0.65, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.3);
+            glassGeo.rotateX(Math.PI / 2);
+            const glassMat = new THREE.MeshPhysicalMaterial({
+                color: 0x3b82f6,
+                emissive: 0x4c1d95,
+                emissiveIntensity: 0.2,
+                metalness: 0.1,
+                roughness: 0.05,
+                transmission: 0.9,
+                transparent: true,
+                opacity: 0.85,
+                reflectivity: 0.9,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.1
+            });
+            const glassMesh = new THREE.Mesh(glassGeo, glassMat);
+            glassMesh.position.z = 0.55;
+            lensGroup.add(glassMesh);
+
+            cameraModelGroup.add(lensGroup);
+
+            // 調整初始相機偏角
+            cameraModelGroup.position.set(1.2, -0.2, 0);
+            cameraModelGroup.rotation.y = -0.5;
+            cameraModelGroup.rotation.x = 0.2;
+            scene.add(cameraModelGroup);
+
+            /* 創立背景星塵粒子 */
+            const starsGeo = new THREE.BufferGeometry();
+            const starsCount = 1200;
+            const starPositions = new Float32Array(starsCount * 3);
+
+            for (let i = 0; i < starsCount * 3; i += 3) {
+                starPositions[i] = (Math.random() - 0.5) * 20;
+                starPositions[i + 1] = (Math.random() - 0.5) * 20;
+                starPositions[i + 2] = (Math.random() - 0.5) * 20;
+            }
+
+            starsGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+            const starsMat = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 0.02,
+                transparent: true,
+                opacity: 0.6
+            });
+            starParticles = new THREE.Points(starsGeo, starsMat);
+            scene.add(starParticles);
+
+            /* 動態響應與滾動監聽 */
+            window.addEventListener('resize', onWindowResize);
+            document.addEventListener('mousemove', onDocumentMouseMove);
+            window.addEventListener('scroll', onScroll);
+        }
+
+        function onScroll() {
+            const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+            if (maxScroll > 0) {
+                scrollProgress = window.scrollY / maxScroll;
+            }
+        }
+
+        let targetX = 0;
+        let targetY = 0;
+
+        function onDocumentMouseMove(e) {
+            targetX = (e.clientX - window.innerWidth / 2) * 0.0003;
+            targetY = (e.clientY - window.innerHeight / 2) * 0.0003;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // 輔助函式：數字插值平滑化
+        function lerp(start, end, amt) {
+            return (1 - amt) * start + amt * end;
+        }
+
+        // 啟動 3D 渲染與 3D 故事進度變換
+        function animateThree() {
+            requestAnimationFrame(animateThree);
+
+            // 平滑滾動數值 (Lerp)
+            currentScroll = lerp(currentScroll, scrollProgress, 0.06);
+
+            // 根據滾動進度 (0 -> 1) 計算相機的角度、位置與縮放，讓相機在下滑時平滑移動並保持在畫面右側
+            if (cameraModelGroup) {
+                const isMobile = window.innerWidth < 1024;
+                
+                // 基準 X 軸位移：行動裝置置中 (0)，桌機與大螢幕固定在右側 (+1.3 ~ +1.8)
+                const rightX = isMobile ? 0 : (window.innerWidth < 1400 ? 1.3 : 1.7);
+
+                let targetPosY, targetPosX, targetRotX, targetRotY, targetRotZ, targetScale;
+
+                if (currentScroll < 0.3) {
+                    // 階段 1：Hero Section -> 相機在右側呈現經典 side/front 視角
+                    const p = currentScroll / 0.3;
+                    targetPosX = lerp(rightX, rightX, p);
+                    targetPosY = lerp(isMobile ? -0.8 : -0.2, 0, p);
+                    targetRotX = lerp(0.2, 0.1, p);
+                    targetRotY = lerp(-0.5, -0.2, p);
+                    targetRotZ = lerp(0, 0.05, p);
+                    targetScale = lerp(1, 1.25, p);
+                } else if (currentScroll < 0.7) {
+                    // 階段 2：Gallery & Accessories -> 在右側拉近展示鏡頭鍍膜與頂部金屬旋鈕細節
+                    const p = (currentScroll - 0.3) / 0.4;
+                    targetPosX = lerp(rightX, rightX + (isMobile ? 0 : 0.2), p);
+                    targetPosY = lerp(0, 0.15, p);
+                    targetRotX = lerp(0.1, 0.85, p); // 仰俯角展示
+                    targetRotY = lerp(-0.2, -0.7, p);
+                    targetRotZ = lerp(0.05, -0.2, p);
+                    targetScale = lerp(1.25, 1.15, p);
+                } else {
+                    // 階段 3：About Section -> 在右側深空緩慢自轉與縮放
+                    const p = (currentScroll - 0.7) / 0.3;
+                    targetPosX = lerp(rightX + (isMobile ? 0 : 0.2), rightX, p);
+                    targetPosY = lerp(0.15, -0.1, p);
+                    targetRotX = lerp(0.85, -0.25, p);
+                    targetRotY = lerp(-0.7, Math.PI - 0.4, p); // 旋轉視角
+                    targetRotZ = lerp(-0.2, 0, p);
+                    targetScale = lerp(1.15, 0.75, p);
+                }
+
+                // 應用動態位置與旋轉
+                cameraModelGroup.position.x = targetPosX;
+                cameraModelGroup.position.y = targetPosY;
+                cameraModelGroup.rotation.x = targetRotX;
+                cameraModelGroup.rotation.y = targetRotY + (currentScroll * 0.4); // 疊加微幅動態旋轉
+                cameraModelGroup.rotation.z = targetRotZ;
+                
+                cameraModelGroup.scale.set(targetScale, targetScale, targetScale);
+            }
+
+            // 背景星雲進度動態
+            if (starParticles) {
+                starParticles.rotation.y = currentScroll * 1.5;
+                starParticles.position.z = currentScroll * 2;
+            }
+
+            // 視差 (Parallax Effect) 緩動
+            cameraGroup.rotation.y += (targetX - cameraGroup.rotation.y) * 0.05;
+            cameraGroup.rotation.x += (-targetY - cameraGroup.rotation.x) * 0.05;
+
+            renderer.render(scene, camera);
+        }
+
+        function scrollToStory() {
+            window.scrollTo({
+                top: window.innerHeight * 0.8,
+                behavior: 'smooth'
+            });
+        }
+
+        window.onload = function() {
+            initThree();
+            onWindowResize();
+            onScroll(); // 初始化滾動位置
+            animateThree();
+            renderGallery('one');
+        };
+
+        /* --------------------------------------------------
+         * 3. 實拍藝廊 (Gallery Tab Switcher)
+         * -------------------------------------------------- */
+        const galleryData = {
+            one: [
+                { url: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=800&q=80", title: "Milky Way Arch", loc: "Mauna Kea, Hawaii" },
+                { url: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80", title: "Deep Space Nebula", loc: "Atacama Desert" },
+                { url: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=800&q=80", title: "Orbital Horizon", loc: "Low Earth Orbit" }
+            ],
+            x: [
+                { url: "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80", title: "Silent Starlight", loc: "Svalbard, Norway" },
+                { url: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=800&q=80", title: "Aurora Reflection", loc: "Reykjavík, Iceland" },
+                { url: "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=800&q=80", title: "Cosmic Shadow", loc: "Tenerife Observatory" }
+            ],
+            pro: [
+                { url: "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&w=800&q=80", title: "Star Trails Sequence", loc: "Death Valley, USA" },
+                { url: "https://images.unsplash.com/photo-1464802686167-b939a6910659?auto=format&fit=crop&w=800&q=80", title: "Galactic Core", loc: "Namib Desert" },
+                { url: "https://images.unsplash.com/photo-1502134249126-9f3755a50d78?auto=format&fit=crop&w=800&q=80", title: "Eclipse Line", loc: "Patagonia" }
+            ]
+        };
+
+        function renderGallery(key) {
+            const grid = document.getElementById('gallery-grid');
+            grid.innerHTML = '';
+
+            galleryData[key].forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'glass-card rounded-2xl overflow-hidden group relative cursor-pointer';
+                card.innerHTML = `
+                    <div class="aspect-[4/5] overflow-hidden relative">
+                        <img src="${item.url}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-85 group-hover:opacity-100">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80 group-hover:opacity-60 transition-opacity"></div>
+                        <div class="absolute bottom-6 left-6 right-6">
+                            <span class="text-[10px] tracking-widest text-purple-400 uppercase font-medium mb-1 block">${item.loc}</span>
+                            <h4 class="text-xl font-light text-white">${item.title}</h4>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function switchTab(tabKey) {
+            // 切換按鈕樣式
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = 'tab-btn px-6 py-2.5 rounded-full text-xs tracking-wider text-slate-400 hover:text-white transition-all duration-300';
+            });
+            const activeBtn = document.getElementById(`tab-${tabKey}`);
+            activeBtn.className = 'tab-btn px-6 py-2.5 rounded-full text-xs tracking-wider transition-all duration-300 bg-purple-600 text-white shadow-lg';
+
+            renderGallery(tabKey);
+        }
+
+        /* --------------------------------------------------
+         * 4. 購物車與互動 Toast 提示
+         * -------------------------------------------------- */
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-message');
+            toastMsg.innerText = msg;
+
+            toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+
+        function addToCart(itemName) {
+            showToast(`已將「${itemName}」加入您的星穹購物車`);
+        }
+
+        function handleSubscribe(e) {
+            e.preventDefault();
+            showToast('感謝訂閱 ASTRUM 宇宙視界電子報');
+            e.target.reset();
+        }
+    </script>
+</body>
+</html>
